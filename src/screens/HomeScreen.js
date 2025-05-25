@@ -1,116 +1,129 @@
-import React, { useState } from 'react';
+import React, { useEffect } from 'react';
 import {
   View,
   Text,
   TextInput,
   TouchableOpacity,
   Alert,
-  StyleSheet,
   StatusBar,
 } from 'react-native';
+import { useSelector, useDispatch } from 'react-redux';
+
+// Import des actions Redux
+import { 
+  testServerConnection, 
+  fetchModels,
+  setServerIP, 
+  setServerPort,
+  selectServer 
+} from '../store/serverSlice';
+
+import { homeStyles as styles } from './HomeScreen.styles';
 
 export default function HomeScreen() {
-  // États locaux pour les champs de saisie
-  const [serverIP, setServerIP] = useState('192.168.1.17'); // IP serveur
-  const [serverPort, setServerPort] = useState('8000'); //port serveur
-  const [isConnecting, setIsConnecting] = useState(false);
-  const [connectionStatus, setConnectionStatus] = useState(null);
+  const dispatch = useDispatch();
+  
+  // Récupération de l'état du serveur depuis le store Redux
+  const server = useSelector(selectServer);
+  const { 
+    ip,                    // Adresse IP du serveur (ex: '192.168.1.17')
+    port,                  // Port du serveur (ex: '8000')
+    isConnected,           // true si connecté avec succès
+    isConnecting,          // true pendant la tentative de connexion
+    connectionMessage,     // Message de réponse du serveur
+    models,                // Liste des modèles RAVE disponibles ['Jazz', 'Darbouka', ...]
+    error                  // Message d'erreur en cas d'échec
+  } = server;
 
-  // test connexion au serveur RAVE
-  const testConnection = async () => {
-    if (!serverIP.trim() || !serverPort.trim()) {
+  const handleTestConnection = async () => {
+    if (!ip.trim() || !port.trim()) {
       Alert.alert('Erreur', 'Veuillez remplir l\'IP et le port du serveur');
       return;
     }
 
-    setIsConnecting(true);
-    setConnectionStatus(null);
-
     try {
-      const url = `http://${serverIP}:${serverPort}/`;
-      console.log('Test de connexion vers:', url);
-
-      const response = await fetch(url, {
-        method: 'GET',
-        timeout: 5000, // 5 secondes de timeout
-      });
-
-      const data = await response.text();
-      console.log('Réponse du serveur:', data);
-
-      if (response.ok) {
-        setConnectionStatus('success');
-        Alert.alert(
-          'Connexion réussie ! 🎉',
-          `Serveur RAVE connecté\nRéponse: ${data}`,
-          [{ text: 'OK', style: 'default' }]
-        );
-      } else {
-        throw new Error(`Erreur HTTP: ${response.status}`);
-      }
-    } catch (error) {
-      console.error('Erreur de connexion:', error);
-      setConnectionStatus('error');
+      // Lancement de l'action asynchrone
+      // unwrap() permet de récupérer directement le résultat ou l'erreur
+      const result = await dispatch(testServerConnection({ ip, port })).unwrap();
+      
       Alert.alert(
-        'Connexion échouée ❌',
-        `Impossible de se connecter au serveur:\n${error.message}\n\nVérifiez que le serveur Python est démarré.`
+        'Connexion réussie !',
+        `Serveur RAVE connecté\nRéponse: ${result.message}`,
+        [{ text: 'OK', style: 'default' }]
       );
-    } finally {
-      setIsConnecting(false);
+    } catch (error) {
+      Alert.alert(
+        'Connexion échouée',
+        `Impossible de se connecter au serveur:\n${error}\n\nVérifiez que le serveur Python est démarré.`
+      );
     }
   };
 
-  // Fonction pour récupérer les modèles disponibles
-  const getModels = async () => {
-    if (connectionStatus !== 'success') {
+  //Affiche la liste des modèles RAVE disponibles
+  const handleGetModels = async () => {
+    if (!isConnected) {
       Alert.alert('Erreur', 'Testez d\'abord la connexion au serveur');
       return;
     }
-
     try {
-      const url = `http://${serverIP}:${serverPort}/getmodels`;
-      const response = await fetch(url);
-      const models = await response.json();
-
-      Alert.alert(
-        'Modèles RAVE disponibles 🎼',
-        models.join('\n• '),
-        [{ text: 'OK' }]
-      );
+      // Récupération des modèles depuis l'endpoint /getmodels
+      await dispatch(fetchModels()).unwrap();
+      
+      if (models.length > 0) {
+        Alert.alert(
+          'Modèles RAVE disponibles 🎼',
+          '• ' + models.join('\n• '),
+          [{ text: 'OK' }]
+        );
+      }
     } catch (error) {
       Alert.alert('Erreur', 'Impossible de récupérer les modèles');
     }
   };
 
+  // === EFFETS ===
+  /*Récupération automatique des modèles après connexion
+   * Se déclenche quand isConnected passe à true*/
+  useEffect(() => {
+    if (isConnected && models.length === 0) {
+      dispatch(fetchModels());
+    }
+  }, [isConnected, dispatch, models.length]);
+
+  // === RENDU ===
   return (
     <View style={styles.container}>
       <StatusBar barStyle="dark-content" backgroundColor="#f8f9fa" />
       
+      {/* En-tête de l'application */}
       <View style={styles.header}>
         <Text style={styles.title}>🎵 RAVE Audio Transfer</Text>
         <Text style={styles.subtitle}>Connexion au serveur</Text>
       </View>
 
+      {/* Formulaire de configuration */}
       <View style={styles.form}>
-        {/* Configuration IP */}
+        
+        {/* Champ IP du serveur */}
         <View style={styles.inputGroup}>
           <Text style={styles.label}>Adresse IP du serveur</Text>
           <TextInput
             style={styles.input}
-            value={serverIP}
-            onChangeText={setServerIP}
+            value={ip}
+            onChangeText={(text) => dispatch(setServerIP(text))}
             placeholder="192.168.1.17"
             keyboardType="numeric"
+            autoCapitalize="none"
           />
         </View>
 
-        {/* Configuration Port */}
+        {/* Champ Port du serveur */}
         <View style={styles.inputGroup}>
           <Text style={styles.label}>Port du serveur</Text>
           <TextInput
             style={styles.input}
-            value={serverPort}
-            onChangeText={setServerPort}
+            value={port}
+            onChangeText={(text) => dispatch(setServerPort(text))}
             placeholder="8000"
             keyboardType="numeric"
           />
@@ -123,7 +136,7 @@ export default function HomeScreen() {
             styles.primaryButton,
             isConnecting && styles.buttonDisabled
           ]}
-          onPress={testConnection}
+          onPress={handleTestConnection}
           disabled={isConnecting}
         >
           <Text style={styles.buttonText}>
@@ -131,154 +144,50 @@ export default function HomeScreen() {
           </Text>
         </TouchableOpacity>
 
-        {/* Indicateur de statut */}
-        {connectionStatus && (
+        {/* Indicateur de statut de connexion */}
+        {(isConnected || error) && (
           <View style={[
             styles.statusIndicator,
-            connectionStatus === 'success' ? styles.statusSuccess : styles.statusError
+            isConnected ? styles.statusSuccess : styles.statusError
           ]}>
             <Text style={styles.statusText}>
-              {connectionStatus === 'success' 
-                ? '✅ Serveur connecté' 
-                : '❌ Connexion échouée'
+              {isConnected 
+                ? `Serveur connecté${models.length > 0 ? ` - ${models.length} modèles` : ''}` 
+                : `${error}`
               }
             </Text>
           </View>
         )}
 
-        {/* Bouton pour voir les modèles (seulement si connecté) */}
-        {connectionStatus === 'success' && (
+        {/* Bouton pour afficher les modèles (visible seulement si connecté) */}
+        {isConnected && (
           <TouchableOpacity
             style={[styles.button, styles.secondaryButton]}
-            onPress={getModels}
+            onPress={handleGetModels}
           >
             <Text style={styles.secondaryButtonText}>
-              📋 Voir les modèles disponibles
+              📋 Voir les modèles disponibles ({models.length})
             </Text>
           </TouchableOpacity>
         )}
       </View>
 
+      {/* Section d'information */}
       <View style={styles.info}>
         <Text style={styles.infoText}>
           💡 Assurez-vous que le serveur Python RAVE est démarré avec{'\n'}
           <Text style={styles.code}>python server.py</Text>
         </Text>
       </View>
+
+      {/* Informations de debug (visible seulement en développement) */}
+      {__DEV__ && (
+        <View style={styles.debug}>
+          <Text style={styles.debugText}>
+            🔧 Debug: Connected={isConnected.toString()}, Models={models.length}
+          </Text>
+        </View>
+      )}
     </View>
   );
 }
-
-const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: '#f8f9fa',
-    paddingHorizontal: 20,
-    paddingTop: 60,
-  },
-  header: {
-    alignItems: 'center',
-    marginBottom: 40,
-  },
-  title: {
-    fontSize: 28,
-    fontWeight: 'bold',
-    color: '#1a1a1a',
-    marginBottom: 5,
-  },
-  subtitle: {
-    fontSize: 16,
-    color: '#666',
-  },
-  form: {
-    backgroundColor: 'white',
-    borderRadius: 15,
-    padding: 25,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 8,
-    elevation: 5,
-  },
-  inputGroup: {
-    marginBottom: 20,
-  },
-  label: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: '#333',
-    marginBottom: 8,
-  },
-  input: {
-    borderWidth: 2,
-    borderColor: '#e1e5e9',
-    borderRadius: 10,
-    padding: 15,
-    fontSize: 16,
-    backgroundColor: '#f8f9fa',
-  },
-  button: {
-    borderRadius: 10,
-    padding: 18,
-    alignItems: 'center',
-    marginVertical: 10,
-  },
-  primaryButton: {
-    backgroundColor: '#007AFF',
-  },
-  secondaryButton: {
-    backgroundColor: 'transparent',
-    borderWidth: 2,
-    borderColor: '#007AFF',
-  },
-  buttonDisabled: {
-    backgroundColor: '#ccc',
-  },
-  buttonText: {
-    color: 'white',
-    fontSize: 16,
-    fontWeight: '600',
-  },
-  secondaryButtonText: {
-    color: '#007AFF',
-    fontSize: 16,
-    fontWeight: '600',
-  },
-  statusIndicator: {
-    borderRadius: 8,
-    padding: 12,
-    marginVertical: 10,
-    alignItems: 'center',
-  },
-  statusSuccess: {
-    backgroundColor: '#d4edda',
-    borderColor: '#28a745',
-    borderWidth: 1,
-  },
-  statusError: {
-    backgroundColor: '#f8d7da',
-    borderColor: '#dc3545',
-    borderWidth: 1,
-  },
-  statusText: {
-    fontWeight: '600',
-  },
-  info: {
-    marginTop: 30,
-    padding: 15,
-    backgroundColor: '#fff3cd',
-    borderRadius: 10,
-    borderWidth: 1,
-    borderColor: '#ffc107',
-  },
-  infoText: {
-    textAlign: 'center',
-    color: '#856404',
-    fontSize: 14,
-  },
-  code: {
-    fontFamily: 'monospace',
-    backgroundColor: '#f1f3f4',
-    paddingHorizontal: 4,
-  },
-});
