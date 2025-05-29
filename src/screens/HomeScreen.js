@@ -9,7 +9,6 @@ import {
 } from 'react-native';
 import { useSelector, useDispatch } from 'react-redux';
 
-// Import des actions Redux
 import { 
   testServerConnection, 
   fetchModels,
@@ -23,18 +22,20 @@ import { homeStyles as styles } from './HomeScreen.styles';
 export default function HomeScreen() {
   const dispatch = useDispatch();
   
-  // Récupération de l'état du serveur depuis le store Redux
+  // État du serveur
   const server = useSelector(selectServer);
   const { 
-    ip,                    // Adresse IP du serveur (ex: '192.168.1.17')
-    port,                  // Port du serveur (ex: '8000')
-    isConnected,           // true si connecté avec succès
-    isConnecting,          // true pendant la tentative de connexion
-    connectionMessage,     // Message de réponse du serveur
-    models,                // Liste des modèles RAVE disponibles ['Jazz', 'Darbouka', ...]
-    error                  // Message d'erreur en cas d'échec
+    ip, 
+    port, 
+    isConnected, 
+    isConnecting, 
+    connectionMessage, 
+    models, 
+    error,
+    isFetchingModels
   } = server;
 
+  // Test de connexion
   const handleTestConnection = async () => {
     if (!ip.trim() || !port.trim()) {
       Alert.alert('Erreur', 'Veuillez remplir l\'IP et le port du serveur');
@@ -42,12 +43,10 @@ export default function HomeScreen() {
     }
 
     try {
-      // Lancement de l'action asynchrone
-      // unwrap() permet de récupérer directement le résultat ou l'erreur
       const result = await dispatch(testServerConnection({ ip, port })).unwrap();
       
       Alert.alert(
-        'Connexion réussie !',
+        'Connexion réussie ! 🎉',
         `Serveur RAVE connecté\nRéponse: ${result.message}`,
         [{ text: 'OK', style: 'default' }]
       );
@@ -59,52 +58,56 @@ export default function HomeScreen() {
     }
   };
 
-  //Affiche la liste des modèles RAVE disponibles
+  // Récupération des modèles
   const handleGetModels = async () => {
     if (!isConnected) {
       Alert.alert('Erreur', 'Testez d\'abord la connexion au serveur');
       return;
     }
+
+    console.log('🔄 Démarrage récupération des modèles...');
+    
     try {
-      // Récupération des modèles depuis l'endpoint /getmodels
-      await dispatch(fetchModels()).unwrap();
+      const result = await dispatch(fetchModels()).unwrap();
+      console.log('✅ Modèles récupérés:', result);
       
-      if (models.length > 0) {
+      if (result && result.length > 0) {
         Alert.alert(
           'Modèles RAVE disponibles 🎼',
-          '• ' + models.join('\n• '),
+          '• ' + result.join('\n• '),
           [{ text: 'OK' }]
         );
+      } else {
+        Alert.alert('Info', 'Aucun modèle trouvé sur le serveur');
       }
     } catch (error) {
-      Alert.alert('Erreur', 'Impossible de récupérer les modèles');
+      console.log('Erreur lors de la récupération:', error);
+      Alert.alert(
+        'Erreur récupération modèles', 
+        `Détail: ${error}`
+      );
     }
   };
 
-  // === EFFETS ===
-  /*Récupération automatique des modèles après connexion
-   * Se déclenche quand isConnected passe à true*/
+  // Récupération automatique des modèles après connexion
   useEffect(() => {
     if (isConnected && models.length === 0) {
+      console.log('Récupération automatique des modèles...');
       dispatch(fetchModels());
     }
   }, [isConnected, dispatch, models.length]);
 
-  // === RENDU ===
   return (
     <View style={styles.container}>
       <StatusBar barStyle="dark-content" backgroundColor="#f8f9fa" />
       
-      {/* En-tête de l'application */}
       <View style={styles.header}>
         <Text style={styles.title}>🎵 RAVE Audio Transfer</Text>
         <Text style={styles.subtitle}>Connexion au serveur</Text>
       </View>
 
-      {/* Formulaire de configuration */}
       <View style={styles.form}>
-        
-        {/* Champ IP du serveur */}
+        {/* IP du serveur */}
         <View style={styles.inputGroup}>
           <Text style={styles.label}>Adresse IP du serveur</Text>
           <TextInput
@@ -117,7 +120,7 @@ export default function HomeScreen() {
           />
         </View>
 
-        {/* Champ Port du serveur */}
+        {/* Port du serveur */}
         <View style={styles.inputGroup}>
           <Text style={styles.label}>Port du serveur</Text>
           <TextInput
@@ -129,7 +132,7 @@ export default function HomeScreen() {
           />
         </View>
 
-        {/* Bouton de test de connexion */}
+        {/* Bouton de connexion */}
         <TouchableOpacity
           style={[
             styles.button,
@@ -140,11 +143,11 @@ export default function HomeScreen() {
           disabled={isConnecting}
         >
           <Text style={styles.buttonText}>
-            {isConnecting ? '🔄 Connexion...' : '🔗 Tester la connexion'}
+            {isConnecting ? 'Connexion...' : 'Tester la connexion'}
           </Text>
         </TouchableOpacity>
 
-        {/* Indicateur de statut de connexion */}
+        {/* Statut de connexion */}
         {(isConnected || error) && (
           <View style={[
             styles.statusIndicator,
@@ -152,27 +155,34 @@ export default function HomeScreen() {
           ]}>
             <Text style={styles.statusText}>
               {isConnected 
-                ? `Serveur connecté${models.length > 0 ? ` - ${models.length} modèles` : ''}` 
-                : `${error}`
+                ? `✅ Serveur connecté${models.length > 0 ? ` - ${models.length} modèles` : ''}` 
+                : `❌ ${error}`
               }
             </Text>
           </View>
         )}
 
-        {/* Bouton pour afficher les modèles (visible seulement si connecté) */}
+        {/* Bouton modèles */}
         {isConnected && (
           <TouchableOpacity
-            style={[styles.button, styles.secondaryButton]}
+            style={[
+              styles.button, 
+              styles.secondaryButton,
+              isFetchingModels && styles.buttonDisabled
+            ]}
             onPress={handleGetModels}
+            disabled={isFetchingModels}
           >
             <Text style={styles.secondaryButtonText}>
-              📋 Voir les modèles disponibles ({models.length})
+              {isFetchingModels 
+                ? '🔄 Récupération...' 
+                : `📋 Voir les modèles disponibles (${models.length})`
+              }
             </Text>
           </TouchableOpacity>
         )}
       </View>
 
-      {/* Section d'information */}
       <View style={styles.info}>
         <Text style={styles.infoText}>
           💡 Assurez-vous que le serveur Python RAVE est démarré avec{'\n'}
@@ -180,11 +190,15 @@ export default function HomeScreen() {
         </Text>
       </View>
 
-      {/* Informations de debug (visible seulement en développement) */}
+      {/* Debug sans crash */}
       {__DEV__ && (
         <View style={styles.debug}>
           <Text style={styles.debugText}>
-            🔧 Debug: Connected={isConnected.toString()}, Models={models.length}
+            🔧 Debug:{'\n'}
+            Connected: {String(isConnected)}{'\n'}
+            Models: {models.length}{'\n'}
+            Fetching: {String(Boolean(isFetchingModels))}{'\n'}
+            Error: {error || 'None'}
           </Text>
         </View>
       )}

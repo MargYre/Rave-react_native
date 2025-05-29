@@ -28,12 +28,45 @@ export const fetchModels = createAsyncThunk(
   'server/fetchModels',
   async (_, { getState, rejectWithValue }) => {
     const { server } = getState();
+    const url = `http://${server.ip}:${server.port}/getmodels`;
+    
     try {
-      const url = `http://${server.ip}:${server.port}/getmodels`;
-      const response = await fetch(url);
-      const models = await response.json();
-      return models;
+      console.log('📋 Récupération modèles depuis:', url);
+      
+      const response = await fetch(url, {
+        method: 'GET',
+        headers: {
+          'Accept': 'application/json',
+          'Content-Type': 'application/json',
+        },
+        timeout: 10000
+      });
+      
+      if (!response.ok) {
+        throw new Error(`HTTP ${response.status} - ${response.statusText}`);
+      }
+      
+      const data = await response.json();
+      console.log('📋 Réponse brute du serveur:', data);
+      let models;
+      if (data.models && Array.isArray(data.models)) {
+        models = data.models;
+      } else if (Array.isArray(data)) {
+        // Au cas où le serveur renverrait directement un tableau
+        models = data;
+      } else {
+        throw new Error(`Format de réponse inattendu: ${JSON.stringify(data)}`);
+      }
+      
+      // Nettoyer les noms des modèles (enlever .onnx)
+      const cleanModels = models.map(model => 
+        model.replace('.onnx', '').toLowerCase()
+      );
+      
+      console.log('Modèles nettoyés:', cleanModels);
+      return cleanModels;
     } catch (error) {
+      console.log('Erreur récupération modèles:', error.message);
       return rejectWithValue(error.message);
     }
   }
@@ -43,46 +76,43 @@ export const fetchModels = createAsyncThunk(
 const serverSlice = createSlice({
   name: 'server',
   initialState: {
-    ip: '192.168.1.17',           // IP par défaut
-    port: '8000',                 // Port par défaut
-    isConnected: false,           // État de connexion
-    isConnecting: false,          // En cours de connexion
-    connectionMessage: '',        // Message de connexion
-    models: [],                   // Modèles RAVE disponibles
-    selectedModel: '',            // Modèle sélectionné
-    error: null,                  // Erreur éventuelle
+    ip: '192.168.1.17',           
+    port: '8000',                 
+    isConnected: false,           
+    isConnecting: false,          
+    connectionMessage: '',        
+    models: [],                   
+    selectedModel: '',            
+    error: null,                  
+    isFetchingModels: false,      
   },
   reducers: {
-    // Mettre à jour l'IP
     setServerIP: (state, action) => {
       state.ip = action.payload;
     },
-    // Mettre à jour le port
     setServerPort: (state, action) => {
       state.port = action.payload;
     },
-    // Sélectionner un modèle RAVE
     setSelectedModel: (state, action) => {
       state.selectedModel = action.payload;
     },
-    // Réinitialiser l'erreur
     clearError: (state) => {
       state.error = null;
     },
-    // Déconnexion
     disconnect: (state) => {
       state.isConnected = false;
       state.connectionMessage = '';
+      state.models = [];
+      state.selectedModel = '';
     },
   },
   extraReducers: (builder) => {
     builder
-      // Test de connexion - en cours
+      // Test de connexion
       .addCase(testServerConnection.pending, (state) => {
         state.isConnecting = true;
         state.error = null;
       })
-      // Test de connexion - succès
       .addCase(testServerConnection.fulfilled, (state, action) => {
         state.isConnecting = false;
         state.isConnected = true;
@@ -90,21 +120,28 @@ const serverSlice = createSlice({
         state.ip = action.payload.ip;
         state.port = action.payload.port;
       })
-      // Test de connexion - échec
       .addCase(testServerConnection.rejected, (state, action) => {
         state.isConnecting = false;
         state.isConnected = false;
         state.error = action.payload;
       })
-      // Récupération modèles - succès
+      
+      // Récupération modèles
+      .addCase(fetchModels.pending, (state) => {
+        state.isFetchingModels = true;
+        state.error = null;
+      })
       .addCase(fetchModels.fulfilled, (state, action) => {
+        state.isFetchingModels = false;
         state.models = action.payload;
+        
+        // Sélectionner le premier modèle par défaut
         if (action.payload.length > 0 && !state.selectedModel) {
-          state.selectedModel = action.payload[0]; // Sélectionner le premier par défaut
+          state.selectedModel = action.payload[0];
         }
       })
-      // Récupération modèles - échec
       .addCase(fetchModels.rejected, (state, action) => {
+        state.isFetchingModels = false;
         state.error = action.payload;
       });
   },
@@ -122,8 +159,9 @@ export const {
 // Export du reducer
 export default serverSlice.reducer;
 
-// Sélecteurs (pour accéder facilement aux données)
+// Sélecteurs
 export const selectServer = (state) => state.server;
 export const selectIsConnected = (state) => state.server.isConnected;
 export const selectModels = (state) => state.server.models;
 export const selectSelectedModel = (state) => state.server.selectedModel;
+export const selectIsFetchingModels = (state) => state.server.isFetchingModels;
