@@ -1,3 +1,4 @@
+// src/screens/RecordScreen.js - Version avec import de styles
 import React, { useState, useEffect } from 'react';
 import {
   View,
@@ -7,12 +8,12 @@ import {
   Alert,
   StatusBar,
   TextInput,
+  Modal,
 } from 'react-native';
 import { Audio } from 'expo-av';
 import * as FileSystem from 'expo-file-system';
 import { useSelector, useDispatch } from 'react-redux';
 
-// Import des actions Redux
 import {
   startRecording as startRecordingAction,
   stopRecording as stopRecordingAction,
@@ -23,53 +24,34 @@ import {
   selectIsRecording
 } from '../store/recordingSlice';
 
-// Import des styles
+// Import des styles séparés
 import { recordStyles as styles } from './RecordScreen.styles';
 
-/**
- * RecordScreen - Vue d'enregistrement audio
- * 
- * FONCTIONNALITÉS :
- * - Enregistrement audio avec le micro
- * - Sauvegarde persistante des fichiers
- * - Liste des enregistrements avec play/pause
- * - Suppression des enregistrements
- * - Nommage personnalisé
- */
 export default function RecordScreen() {
   // === ÉTAT REDUX ===
   const dispatch = useDispatch();
   const recordings = useSelector(selectRecordings);
   const isRecordingRedux = useSelector(selectIsRecording);
+  const playingId = useSelector(state => state.recording.playingId);
   
   // === ÉTAT LOCAL ===
-  const [recording, setRecording] = useState(null);          // Instance d'enregistrement Expo
-  const [sound, setSound] = useState(null);                  // Instance de lecture
-  const [recordingName, setRecordingName] = useState('');    // Nom pour sauvegarder
-  const [recordingDuration, setRecordingDuration] = useState(0); // Durée en cours
+  const [recording, setRecording] = useState(null);
+  const [sound, setSound] = useState(null);
+  const [recordingName, setRecordingName] = useState('');
+  const [recordingDuration, setRecordingDuration] = useState(0);
+  const [pendingRecordingUri, setPendingRecordingUri] = useState(null);
+  const [showSaveModal, setShowSaveModal] = useState(false);
   const [permissionResponse, requestPermission] = Audio.usePermissions();
 
-  // === EFFECTS ===
-  
-  /**
-   * Configuration audio au montage du composant
-   */
+  // === CONFIGURATION AUDIO ===
   useEffect(() => {
     configureAudio();
     return () => {
-      // Nettoyage à la destruction du composant
-      if (sound) {
-        sound.unloadAsync();
-      }
-      if (recording) {
-        recording.stopAndUnloadAsync();
-      }
+      if (sound) sound.unloadAsync();
+      if (recording) recording.stopAndUnloadAsync();
     };
   }, []);
 
-  /**
-   * Configuration du mode audio
-   */
   const configureAudio = async () => {
     try {
       await Audio.setAudioModeAsync({
@@ -80,30 +62,24 @@ export default function RecordScreen() {
         shouldDuckAndroid: true,
       });
     } catch (error) {
-      console.log('Erreur configuration audio:', error);
+      console.log('❌ Erreur configuration audio:', error);
     }
   };
 
-  // === HANDLERS D'ENREGISTREMENT ===
-
-  /**
-   *  Démarrer l'enregistrement
-   */
+  // === ENREGISTREMENT ===
   const startRecording = async () => {
     try {
-      // Vérifier les permissions
       if (permissionResponse?.status !== 'granted') {
         console.log('📋 Demande de permission micro...');
         const permission = await requestPermission();
         if (permission.status !== 'granted') {
-          Alert.alert('Permission requise', 'L\'accès au microphone est nécessaire pour enregistrer');
+          Alert.alert('Permission requise', 'L\'accès au microphone est nécessaire');
           return;
         }
       }
 
       console.log('🔴 Démarrage enregistrement...');
       
-      // Configuration de l'enregistrement
       const recordingOptions = {
         android: {
           extension: '.m4a',
@@ -120,37 +96,31 @@ export default function RecordScreen() {
           sampleRate: 44100,
           numberOfChannels: 2,
           bitRate: 128000,
-          linearPCMBitDepth: 16,
-          linearPCMIsBigEndian: false,
-          linearPCMIsFloat: false,
         },
       };
 
-      // Créer et démarrer l'enregistrement
       const { recording: newRecording } = await Audio.Recording.createAsync(recordingOptions);
       setRecording(newRecording);
       dispatch(startRecordingAction());
       
-      // Suivre la durée
       newRecording.setOnRecordingStatusUpdate((status) => {
         if (status.isRecording) {
           setRecordingDuration(Math.floor(status.durationMillis / 1000));
         }
       });
 
-      console.log('Enregistrement démarré');
+      console.log('✅ Enregistrement démarré');
     } catch (error) {
-      console.log('Erreur démarrage enregistrement:', error);
+      console.log('❌ Erreur démarrage:', error);
       Alert.alert('Erreur', 'Impossible de démarrer l\'enregistrement');
     }
   };
 
-  /*Arrêter l'enregistrement*/
   const stopRecording = async () => {
     if (!recording) return;
 
     try {
-      console.log('Arrêt enregistrement...');
+      console.log('⏹️ Arrêt enregistrement...');
       
       await recording.stopAndUnloadAsync();
       const uri = recording.getURI();
@@ -159,46 +129,29 @@ export default function RecordScreen() {
       setRecordingDuration(0);
       dispatch(stopRecordingAction());
 
-      console.log('Enregistrement arrêté, URI:', uri);
+      console.log('✅ Enregistrement arrêté, URI:', uri);
 
-      // Proposer de sauvegarder
       if (uri) {
-        Alert.alert(
-          'Enregistrement terminé',
-          'Voulez-vous sauvegarder cet enregistrement ?',
-          [
-            { text: 'Supprimer', style: 'destructive', onPress: () => deleteRecordingFile(uri) },
-            { text: 'Sauvegarder', onPress: () => showSaveDialog(uri) }
-          ]
-        );
+        setPendingRecordingUri(uri);
+        setRecordingName(`Enregistrement ${recordings.length + 1}`);
+        setShowSaveModal(true);
       }
     } catch (error) {
-      console.log('Erreur arrêt enregistrement:', error);
-      Alert.alert('Erreur', 'Problème lors de l\'arrêt de l\'enregistrement');
+      console.log('❌ Erreur arrêt:', error);
+      Alert.alert('Erreur', 'Problème lors de l\'arrêt');
     }
   };
 
-  /*Afficher le dialogue de sauvegarde*/
-  const showSaveDialog = (uri) => {
-    Alert.prompt(
-      'Sauvegarder l\'enregistrement',
-      'Donnez un nom à votre enregistrement :',
-      [
-        { text: 'Annuler', style: 'cancel', onPress: () => deleteRecordingFile(uri) },
-        { 
-          text: 'Sauvegarder', 
-          onPress: (name) => saveRecording(uri, name || `Enregistrement ${recordings.length + 1}`)
-        }
-      ],
-      'plain-text',
-      `Enregistrement ${recordings.length + 1}`
-    );
-  };
+  // === SAUVEGARDE ===
+  const saveRecording = async () => {
+    if (!pendingRecordingUri || !recordingName.trim()) {
+      Alert.alert('Erreur', 'Veuillez saisir un nom pour l\'enregistrement');
+      return;
+    }
 
-  /*Sauvegarder l'enregistrement*/
-  const saveRecording = async (tempUri, name) => {
     try {
-      // Créer le dossier de stockage s'il n'existe pas
+      console.log('💾 Sauvegarde de l\'enregistrement...');
+      
       const recordingsDir = `${FileSystem.documentDirectory}recordings/`;
       const dirInfo = await FileSystem.getInfoAsync(recordingsDir);
       
@@ -206,48 +159,52 @@ export default function RecordScreen() {
         await FileSystem.makeDirectoryAsync(recordingsDir, { intermediates: true });
       }
 
-      // Nom de fichier unique
-      const fileName = `${Date.now()}_${name.replace(/[^a-z0-9]/gi, '_')}.m4a`;
+      const fileName = `${Date.now()}_${recordingName.replace(/[^a-z0-9]/gi, '_')}.m4a`;
       const finalUri = `${recordingsDir}${fileName}`;
 
-      // Copier le fichier temporaire vers le stockage permanent
       await FileSystem.copyAsync({
-        from: tempUri,
+        from: pendingRecordingUri,
         to: finalUri
       });
 
-      // Obtenir des infos sur le fichier
       const fileInfo = await FileSystem.getInfoAsync(finalUri);
       
-      // Créer l'objet d'enregistrement
       const newRecording = {
         id: Date.now().toString(),
-        name: name,
+        name: recordingName.trim(),
         uri: finalUri,
         duration: recordingDuration,
         size: fileInfo.size,
         createdAt: new Date().toISOString(),
       };
 
-      // Ajouter au store Redux
       dispatch(addRecording(newRecording));
+      console.log('✅ Enregistrement sauvé:', newRecording);
 
-      console.log('Enregistrement sauvé:', newRecording);
-      Alert.alert('Succès', `Enregistrement "${name}" sauvegardé !`);
+      await deleteRecordingFile(pendingRecordingUri);
+      setPendingRecordingUri(null);
+      setRecordingName('');
+      setShowSaveModal(false);
 
-      // Supprimer le fichier temporaire
-      await deleteRecordingFile(tempUri);
+      Alert.alert('Succès !', `Enregistrement "${recordingName}" sauvegardé`);
     } catch (error) {
-      console.log('Erreur sauvegarde:', error);
+      console.log('❌ Erreur sauvegarde:', error);
       Alert.alert('Erreur', 'Impossible de sauvegarder l\'enregistrement');
     }
   };
 
-  //  HANDLERS DE LECTURE
-  /* Lire un enregistrement*/
+  const cancelSave = async () => {
+    if (pendingRecordingUri) {
+      await deleteRecordingFile(pendingRecordingUri);
+    }
+    setPendingRecordingUri(null);
+    setRecordingName('');
+    setShowSaveModal(false);
+  };
+
+  // === LECTURE ===
   const playRecording = async (recordingItem) => {
     try {
-      // Arrêter la lecture précédente
       if (sound) {
         await sound.unloadAsync();
         setSound(null);
@@ -256,7 +213,6 @@ export default function RecordScreen() {
 
       console.log('▶️ Lecture:', recordingItem.name);
       
-      // Créer et démarrer la nouvelle lecture
       const { sound: newSound } = await Audio.Sound.createAsync(
         { uri: recordingItem.uri },
         { shouldPlay: true }
@@ -265,7 +221,6 @@ export default function RecordScreen() {
       setSound(newSound);
       dispatch(setPlayingId(recordingItem.id));
 
-      // Arrêter automatiquement à la fin
       newSound.setOnPlaybackStatusUpdate((status) => {
         if (status.didJustFinish) {
           dispatch(setPlayingId(null));
@@ -274,12 +229,11 @@ export default function RecordScreen() {
         }
       });
     } catch (error) {
-      console.log('Erreur lecture:', error);
+      console.log('❌ Erreur lecture:', error);
       Alert.alert('Erreur', 'Impossible de lire l\'enregistrement');
     }
   };
 
-  /*Arrêter la lecture*/
   const stopPlayback = async () => {
     if (sound) {
       await sound.unloadAsync();
@@ -288,12 +242,11 @@ export default function RecordScreen() {
     }
   };
 
-  //  HANDLERS DE GESTION
-  /* Supprimer un enregistrement*/
+  // === SUPPRESSION ===
   const handleDeleteRecording = (recordingItem) => {
     Alert.alert(
       'Supprimer l\'enregistrement',
-      `Êtes-vous sûr de vouloir supprimer "${recordingItem.name}" ?`,
+      `Supprimer "${recordingItem.name}" ?`,
       [
         { text: 'Annuler', style: 'cancel' },
         { 
@@ -305,28 +258,20 @@ export default function RecordScreen() {
     );
   };
 
-  /*Confirmer la suppression*/
   const confirmDelete = async (recordingItem) => {
     try {
-      // Supprimer le fichier
       await deleteRecordingFile(recordingItem.uri);
-      
-      // Supprimer du store
       dispatch(deleteRecording(recordingItem.id));
       
-      // Arrêter la lecture si c'est le fichier en cours
-      if (sound) {
-        await stopPlayback();
-      }
-
-      console.log('Enregistrement supprimé:', recordingItem.name);
+      if (sound) await stopPlayback();
+      
+      console.log('✅ Enregistrement supprimé:', recordingItem.name);
     } catch (error) {
-      console.log('Erreur suppression:', error);
-      Alert.alert('Erreur', 'Impossible de supprimer l\'enregistrement');
+      console.log('❌ Erreur suppression:', error);
+      Alert.alert('Erreur', 'Impossible de supprimer');
     }
   };
 
-  /**Supprimer un fichier*/
   const deleteRecordingFile = async (uri) => {
     try {
       const fileInfo = await FileSystem.getInfoAsync(uri);
@@ -334,30 +279,26 @@ export default function RecordScreen() {
         await FileSystem.deleteAsync(uri);
       }
     } catch (error) {
-      console.log('Erreur suppression fichier:', error);
+      console.log('❌ Erreur suppression fichier:', error);
     }
   };
 
   // === FORMATAGE ===
-  /*Formater la durée en MM:SS*/
   const formatDuration = (seconds) => {
     const mins = Math.floor(seconds / 60);
     const secs = seconds % 60;
     return `${mins}:${secs.toString().padStart(2, '0')}`;
   };
 
-  /* Formater la taille de fichier*/
   const formatFileSize = (bytes) => {
     if (bytes < 1024) return `${bytes} B`;
     if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
     return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
   };
 
-  // === RENDU DES ÉLÉMENTS ===
-
-  /*Rendu d'un élément de la liste*/
+  // === RENDU ITEM ===
   const renderRecordingItem = ({ item }) => {
-    const isPlaying = useSelector(state => state.recording.playingId === item.id);
+    const isPlaying = playingId === item.id;
     
     return (
       <View style={styles.recordingItem}>
@@ -389,11 +330,11 @@ export default function RecordScreen() {
     );
   };
 
+  // === RENDU PRINCIPAL ===
   return (
     <View style={styles.container}>
       <StatusBar barStyle="dark-content" backgroundColor="#f8f9fa" />
       
-      {/* En-tête */}
       <View style={styles.header}>
         <Text style={styles.title}>🎤 Enregistrement Audio</Text>
         <Text style={styles.subtitle}>
@@ -401,7 +342,7 @@ export default function RecordScreen() {
         </Text>
       </View>
 
-      {/* Interface d'enregistrement */}
+      {/* Contrôles d'enregistrement */}
       <View style={styles.recordingControls}>
         <TouchableOpacity
           style={[
@@ -442,6 +383,45 @@ export default function RecordScreen() {
           />
         )}
       </View>
+
+      {/* Modal de sauvegarde */}
+      <Modal
+        visible={showSaveModal}
+        transparent={true}
+        animationType="slide"
+        onRequestClose={cancelSave}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalContent}>
+            <Text style={styles.modalTitle}>💾 Sauvegarder l'enregistrement</Text>
+            
+            <TextInput
+              style={styles.modalInput}
+              value={recordingName}
+              onChangeText={setRecordingName}
+              placeholder="Nom de l'enregistrement"
+              maxLength={50}
+              autoFocus={true}
+            />
+            
+            <View style={styles.modalButtons}>
+              <TouchableOpacity
+                style={[styles.modalButton, styles.cancelButton]}
+                onPress={cancelSave}
+              >
+                <Text style={styles.cancelButtonText}>Annuler</Text>
+              </TouchableOpacity>
+              
+              <TouchableOpacity
+                style={[styles.modalButton, styles.saveButton]}
+                onPress={saveRecording}
+              >
+                <Text style={styles.saveButtonText}>Sauvegarder</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
     </View>
   );
 }

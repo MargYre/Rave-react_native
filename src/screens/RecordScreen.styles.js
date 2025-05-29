@@ -1,8 +1,8 @@
 import { StyleSheet } from 'react-native';
 
+// Couleurs
 const colors = {
   primary: '#007AFF',
-  primaryLight: '#4DA6FF',
   secondary: '#FF3B30',
   success: '#34C759',
   warning: '#FF9500',
@@ -12,11 +12,10 @@ const colors = {
   textSecondary: '#666666',
   border: '#e1e5e9',
   shadow: '#000000',
-  red: '#FF3B30',
-  green: '#34C759',
 };
 
 export const recordStyles = StyleSheet.create({
+  // === LAYOUT ===
   container: {
     flex: 1,
     backgroundColor: colors.background,
@@ -24,6 +23,7 @@ export const recordStyles = StyleSheet.create({
     paddingTop: 60,
   },
 
+  // === HEADER ===
   header: {
     alignItems: 'center',
     marginBottom: 30,
@@ -39,6 +39,7 @@ export const recordStyles = StyleSheet.create({
     color: colors.textSecondary,
   },
 
+  // === CONTRÔLES D'ENREGISTREMENT ===
   recordingControls: {
     alignItems: 'center',
     backgroundColor: colors.white,
@@ -80,6 +81,7 @@ export const recordStyles = StyleSheet.create({
     color: colors.secondary,
   },
 
+  // === LISTE DES ENREGISTREMENTS ===
   recordingsList: {
     flex: 1,
   },
@@ -90,6 +92,7 @@ export const recordStyles = StyleSheet.create({
     marginBottom: 15,
   },
   
+  // === ÉLÉMENT D'ENREGISTREMENT ===
   recordingItem: {
     backgroundColor: colors.white,
     borderRadius: 12,
@@ -138,6 +141,7 @@ export const recordStyles = StyleSheet.create({
     fontSize: 16,
   },
 
+  // === ÉTAT VIDE ===
   emptyState: {
     alignItems: 'center',
     justifyContent: 'center',
@@ -151,5 +155,69 @@ export const recordStyles = StyleSheet.create({
     color: colors.textSecondary,
     textAlign: 'center',
     lineHeight: 24,
+  },
+
+  // === MODAL DE SAUVEGARDE ===
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 20,
+  },
+  modalContent: {
+    backgroundColor: colors.white,
+    borderRadius: 20,
+    padding: 25,
+    width: '100%',
+    maxWidth: 400,
+    shadowColor: colors.shadow,
+    shadowOffset: { width: 0, height: 10 },
+    shadowOpacity: 0.3,
+    shadowRadius: 20,
+    elevation: 10,
+  },
+  modalTitle: {
+    fontSize: 20,
+    fontWeight: 'bold',
+    color: colors.text,
+    textAlign: 'center',
+    marginBottom: 20,
+  },
+  modalInput: {
+    borderWidth: 2,
+    borderColor: colors.border,
+    borderRadius: 12,
+    padding: 15,
+    fontSize: 16,
+    marginBottom: 25,
+    backgroundColor: colors.background,
+  },
+  modalButtons: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+  },
+  modalButton: {
+    flex: 1,
+    padding: 15,
+    borderRadius: 12,
+    alignItems: 'center',
+    marginHorizontal: 5,
+  },
+  cancelButton: {
+    backgroundColor: colors.border,
+  },
+  cancelButtonText: {
+    color: colors.textSecondary,
+    fontSize: 16,
+    fontWeight: '600',
+  },
+  saveButton: {
+    backgroundColor: colors.success,
+  },
+  saveButtonText: {
+    color: colors.white,
+    fontSize: 16,
+    fontWeight: '600',
   },
 });
