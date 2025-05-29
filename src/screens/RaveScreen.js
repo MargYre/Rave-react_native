@@ -32,6 +32,9 @@ import {
   resetTransformation
 } from '../store/raveSlice';
 
+// Import du composant Assets
+import AssetsTab from '../components/AssetsTab';
+
 // Import des styles
 import { raveStyles as styles } from './RaveScreen.styles';
 
@@ -326,16 +329,12 @@ export default function RaveScreen() {
   };
 
   // === RENDU DES ONGLETS ===
-  const AssetsTab = () => (
-    <View style={styles.tabContent}>
-      <Text style={styles.tabTitle}>🎼 Sons par défaut</Text>
-      <View style={styles.comingSoon}>
-        <Text style={styles.comingSoonText}>
-          Fonctionnalité à venir{'\n'}
-          Fichiers audio intégrés à l'app
-        </Text>
-      </View>
-    </View>
+  const AssetsTabScreen = () => (
+    <AssetsTab 
+      styles={styles} 
+      selectedFileLocal={selectedFileLocal} 
+      setSelectedFileLocal={setSelectedFileLocal} 
+    />
   );
 
   const RecordsTab = () => (
@@ -393,7 +392,7 @@ export default function RaveScreen() {
   );
 
   const renderScene = SceneMap({
-    assets: AssetsTab,
+    assets: AssetsTabScreen,
     records: RecordsTab,
     files: FilesTab,
   });

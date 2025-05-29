@@ -328,4 +328,34 @@ export const raveStyles = StyleSheet.create({
     fontSize: 14,
     color: colors.textSecondary,
   },
+
+  // === ASSETS SPÉCIFIQUES ===
+  previewSection: {
+    marginTop: 20,
+  },
+  previewTitle: {
+    fontSize: 16,
+    fontWeight: 'bold',
+    color: colors.text,
+    marginBottom: 15,
+  },
+  previewItem: {
+    opacity: 0.6,
+    borderStyle: 'dashed',
+    borderWidth: 1,
+    borderColor: colors.border,
+  },
+  previewFileName: {
+    fontStyle: 'italic',
+  },
+  previewIcon: {
+    fontSize: 18,
+    color: colors.textSecondary,
+  },
+  assetDescription: {
+    fontSize: 12,
+    color: colors.textSecondary,
+    fontStyle: 'italic',
+    marginTop: 4,
+  },
 });
